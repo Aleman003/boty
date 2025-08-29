@@ -5,6 +5,7 @@ from core.config import settings
 GRAPH = settings.GRAPH_VER
 PHONE_ID = settings.WHATSAPP_PHONE_ID
 TOKEN = settings.WHATSAPP_TOKEN
+HEAD = {"Authorization": f"Bearer {settings.WA_ACCESS_TOKEN}"}
 
 def normalize_mx(num: str) -> str:
     s = re.sub(r"\D", "", num or "")
@@ -25,6 +26,14 @@ async def send_text(to: str, body: str):
         r = await client.post(url, headers=headers, json=payload)
         r.raise_for_status()
 
+async def send_text(to: str, body: str) -> dict:
+    payload = {"messaging_product":"whatsapp","to":to,"type":"text","text":{"body":body}}
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.post(GRAPH, headers={**HEAD, "Content-Type":"application/json"}, json=payload)
+        if r.status_code >= 300:
+            print("WA SEND ERROR:", r.status_code, r.text)
+        return {"status": r.status_code, "body": r.text}
+    
 async def mark_as_read(wamid: str):
     url = f"https://graph.facebook.com/{GRAPH}/{PHONE_ID}/messages"
     payload = {"messaging_product":"whatsapp","status":"read","message_id": wamid}

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request, HTTPException
+import os 
+from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi.responses import PlainTextResponse
 import hmac, hashlib, re, time
 from core.config import settings
 from services.dedupe import dedupe
@@ -7,9 +9,26 @@ from services.memory import load_slots, merge_slots, log_turn, recent_dialog
 from services.policy import quick_intent_router, grounding
 from services.agent import infer_json
 
-router = APIRouter()
+router = APIRouter(tags=["webhook"])
 
-@router.get("/webhook")
+VERIFY_TOKEN = os.getenv("MI_VERIFY_TOKEN", "MI_TOKEN_SEGURO")
+
+@router.get(
+    "/webhook",
+    response_class=PlainTextResponse,
+    operation_id="webhook_verify_v1",  # evita duplicados
+    summary="Verify",
+    include_in_schema=True,
+)
+def verify(
+    hub_mode: str | None = Query(None, alias="hub.mode"),
+    hub_challenge: str | None = Query(None, alias="hub.challenge"),
+    hub_verify_token: str | None = Query(None, alias="hub.verify_token"),
+):
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN and hub_challenge:
+        return hub_challenge
+    raise HTTPException(status_code=403, detail="verify failed")
+
 async def verify(request: Request):
     q = dict(request.query_params)
     if q.get("hub.mode") == "subscribe" and q.get("hub.verify_token") == settings.WHATSAPP_VERIFY_TOKEN:
